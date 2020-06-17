@@ -2,8 +2,8 @@
 
 import sys
 
-reload(sys)
-sys.setdefaultencoding('utf-8')
+#reload(sys)
+#sys.setdefaultencoding('utf-8')
 
 from selenium.webdriver import Firefox
 from time import sleep
@@ -11,7 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 from collections import OrderedDict
 import re
-from sets import Set
+#from sets import set don't need sets, built into python 3
 import json
 from random import choice, randint
 from selenium.webdriver import Firefox
@@ -36,15 +36,15 @@ class RedFin():
         self.output_data = []
         self.property_urls = []
         #  load proxies from file one per line proxy:port format
-        self.proxies = [l.rstrip() for l in open('proxies.txt').readlines()]
+      #  self.proxies = [l.rstrip() for l in open('proxies.txt').readlines()]
         #  make a separate session for each proxy
         self.sessions = {}
-        for proxy in self.proxies:
-            self.sessions[proxy] = {
-                'session': requests.Session(),
-                'proxy': {'http': 'http://' + proxy,
-                          'https': 'https://' + proxy}
-            }
+        # for proxy in self.proxies:
+        #     self.sessions[proxy] = {
+        #         'session': requests.Session(),
+        #         'proxy': {'http': 'http://' + proxy,
+        #                   'https': 'https://' + proxy}
+        #    }
         # load data collected so far in order to avoid needing to scrape
         #  the same data twice
         try:
@@ -58,7 +58,7 @@ class RedFin():
 
     def parse_finished_urls(self):
         #  function for removing urls that have already completed
-        done_urls_list = Set()
+        done_urls_list = set()
         for property_data in self.output_data:
             url = property_data['url'][22:]
             done_urls_list.add(url)
@@ -69,7 +69,8 @@ class RedFin():
     def get_search_results(self):
         page_source = self.request_search_page(self.start_url)
         self.property_urls = reg_property_urls.findall(page_source.replace('\\u002F', '/'))
-        self.property_urls = list(Set(self.property_urls))
+        self.property_urls = list(set(self.property_urls))
+        self.property_urls = ["https://www.redfin.com" + prop_urls for prop_urls in self.property_urls]
         print('found ' + str(len(self.property_urls)) + ' results')
         self.parse_finished_urls()
 
@@ -90,7 +91,7 @@ class RedFin():
     def make_page_request(self, property_url):
         self.rand_sleep()
         if self.use_selenium:
-            return self.get_page_selenium('https://www.redfin.com' + property_url)
+            return self.get_page_selenium('https://www.redfin.com' + property_url) ## think i need to remove the beginning clause
         elif self.use_proxies:
             return self.make_page_request_proxy(property_url)
         else:
@@ -99,6 +100,7 @@ class RedFin():
     def make_page_request_no_proxy(self, property_url):
         #  use a loop to handle various http request errors and retry
         #  if 10 fails reached assume we've been blcoked
+        print(property_url)
         for i in range(10):
             try:
                 http_response = self.session.get(property_url, headers=user_agent_header, verify=False)
@@ -132,91 +134,95 @@ class RedFin():
 
         #  use try catch to handle when a data point is not available
         try:
-            property_data['street_address'] = self.soup.find('span', attrs={'itemprop': 'streetAddress'}).get_text()
+            property_data['street_address'] = soup.find('span', class_= 'street-address').get_text()
         except:
             property_data['street_address'] = 'N/A';print('street_address not found')
         try:
-            property_data['address_locality'] = self.soup.find('span', attrs={'itemprop': 'addressLocality'}).get_text()
+            property_data['citystatezip'] = self.soup.find('span', class_= 'citystatezip').get_text()
+
         except:
-            property_data['address_locality'] = 'N/A';print('address_locality not found')
+            property_data['citystatezip'] = 'N/A';print('citystatezip not found')
+
         try:
-            property_data['address_region'] = self.soup.find('span', attrs={'itemprop': 'addressRegion'}).get_text()
-        except:
-            property_data['address_region'] = 'N/A';print('address_region not found')
-        try:
-            property_data['postal_code'] = self.soup.find('span', attrs={'itemprop': 'postalCode'}).get_text()
-        except:
-            property_data['postal_code'] = 'N/A';print('postal_code not found')
-        try:
-            property_data['price'] = self.soup.find('div', attrs={'class': 'info-block price'}).find('div').get_text()
+            property_data['price'] = soup.find('div', class_= 'statsValue').get_text()
+
         except:
             property_data['price'] = 'N/A';print('price not found')
         try:
-            property_data['beds'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-beds'}).find('div').get_text()
-        except:
-            property_data['beds'] = 'N/A';print('beds not found')
-        try:
-            property_data['baths'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-baths'}).find(
-                'div').get_text()
-        except:
-            property_data['baths'] = 'N/A';print('baths not found')
-        try:
-            property_data['sqFt'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-sqFt'}).find('span', attrs={
-                'class': 'main-font statsValue'}).get_text()
-        except:
-            property_data['sqFt'] = 'N/A';print('sqFt not found')
-        try:
-            property_data['price_per_sqFt'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-sqFt'}).find('div',
-                                                                                                                attrs={
-                                                                                                                    "data-rf-test-id": "abp-priceperft"}).get_text()
-        except:
-            property_data['price_per_sqFt'] = 'N/A';print('price_per_sqFt not found')
-        try:
-            property_data['year_built'] = self.soup.find('span', attrs={"data-rf-test-id": "abp-yearBuilt"}).find(
-                'span', attrs={'class': 'value'}).get_text()
-        except:
-            property_data['year_built'] = 'N/A';print('year_built not found')
-        try:
-            property_data['days_on_redfin'] = self.soup.find('span',
-                                                             attrs={"data-rf-test-id": "abp-daysOnRedfin"}).find('span',
-                                                                                                                 attrs={
-                                                                                                                     'class': 'value'}).get_text()
-        except:
-            property_data['days_on_redfin'] = 'N/A';print('days_on_redfin not found')
-        try:
-            property_data['status'] = self.soup.find('span', attrs={"data-rf-test-id": "abp-status"}).find('span',
-                                                                                                           attrs={
-                                                                                                               'class': 'value'}).get_text()
-        except:
-            property_data['status'] = 'N/A';print('status not found')
+            property_data['redfin_estimate'] = soup.find('span', attrs={'data-rf-test-id':'avmLdpPrice'}).get_text()
 
-        property_data['summary'] = self.soup.find('div', attrs={'class': 'remarks'}).get_text()
-        for row in self.soup.find('div', attrs={'class': 'more-info-div'}).find_all('tr'):
-            cells = row.find_all('td')
-            property_data[cells[0].get_text().strip()] = cells[1].get_text().strip()
+        except:
+            property_data['redfin_estimate'] = 'N/A';print('redfin estimate not found')
+
+        #DON'T NEED ANY OF THE OTHER INFO AT THIS TIME.
+        # try:
+        #     property_data['beds'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-beds'}).find('div').get_text()
+        # except:
+        #     property_data['beds'] = 'N/A';print('beds not found')
+        # try:
+        #     property_data['baths'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-baths'}).find(
+        #         'div').get_text()
+        # except:
+        #     property_data['baths'] = 'N/A';print('baths not found')
+        # try:
+        #     property_data['sqFt'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-sqFt'}).find('span', attrs={
+        #         'class': 'main-font statsValue'}).get_text()
+        # except:
+        #     property_data['sqFt'] = 'N/A';print('sqFt not found')
+        # try:
+        #     property_data['price_per_sqFt'] = self.soup.find('div', attrs={'data-rf-test-id': 'abp-sqFt'}).find('div',
+        #                                                                                                         attrs={
+        #                                                                                                             "data-rf-test-id": "abp-priceperft"}).get_text()
+        # except:
+        #     property_data['price_per_sqFt'] = 'N/A';print('price_per_sqFt not found')
+        # try:
+        #     property_data['year_built'] = self.soup.find('span', attrs={"data-rf-test-id": "abp-yearBuilt"}).find(
+        #         'span', attrs={'class': 'value'}).get_text()
+        # except:
+        #     property_data['year_built'] = 'N/A';print('year_built not found')
+        # try:
+        #     property_data['days_on_redfin'] = self.soup.find('span',
+        #                                                      attrs={"data-rf-test-id": "abp-daysOnRedfin"}).find('span',
+        #                                                                                                          attrs={
+        #                                                                                                              'class': 'value'}).get_text()
+        # except:
+        #     property_data['days_on_redfin'] = 'N/A';print('days_on_redfin not found')
+        # try:
+        #     property_data['status'] = self.soup.find('span', attrs={"data-rf-test-id": "abp-status"}).find('span',
+        #                                                                                                    attrs={
+        #                                                                                                        'class': 'value'}).get_text()
+        # except:
+        #     property_data['status'] = 'N/A';print('status not found')
+        # try:
+        #     property_data['summary'] = self.soup.find('div', attrs={'class': 'remarks'}).get_text()
+        # except:
+        #     property_data['summary'] = 'N/A';print('summary not found')
+        # for row in self.soup.find('div', attrs={'class': 'more-info-div'}).find_all('tr'):
+        #     cells = row.find_all('td')
+        #     property_data[cells[0].get_text().strip()] = cells[1].get_text().strip()
 
         # use loops to maintain data structure ina dict
-        property_data['property_details'] = OrderedDict()
-        for category in self.soup.find('div', attrs={'class': 'amenities-container'}).children:
-            key = category.contents[0].get_text().strip()
-            property_data['property_details'][key] = OrderedDict()
-            for row in category.contents[1].find_all('div', attrs={'class': 'amenity-group'}):
-                key2 = row.find('h4').get_text()
-                property_data['property_details'][key][key2] = []
-                for row2 in row.find_all('li'):
-                    property_data['property_details'][key][key2].append(row2.get_text())
-
-        property_data['propert_history'] = []
-        for row in self.soup.find_all('tr', attrs={'id': reg_property_history_row}):
-            data_cells = row.find_all('td')
-            history_data_row = OrderedDict()
-            history_data_row['date'] = data_cells[0].get_text()
-            history_data_row['event & source'] = data_cells[1].get_text()
-            history_data_row['price'] = data_cells[2].get_text()
-            history_data_row['appreciation'] = data_cells[3].get_text()
-            property_data['propert_history'].append(history_data_row)
-
-        property_data['url'] = 'https://www.redfin.com' + property_url
+        # property_data['property_details'] = OrderedDict()
+        # for category in self.soup.find('div', attrs={'class': 'amenities-container'}).children:
+        #     key = category.contents[0].get_text().strip()
+        #     property_data['property_details'][key] = OrderedDict()
+        #     for row in category.contents[1].find_all('div', attrs={'class': 'amenity-group'}):
+        #         key2 = row.find('h4').get_text()
+        #         property_data['property_details'][key][key2] = []
+        #         for row2 in row.find_all('li'):
+        #             property_data['property_details'][key][key2].append(row2.get_text())
+        #
+        # property_data['propert_history'] = []
+        # for row in self.soup.find_all('tr', attrs={'id': reg_property_history_row}):
+        #     data_cells = row.find_all('td')
+        #     history_data_row = OrderedDict()
+        #     history_data_row['date'] = data_cells[0].get_text()
+        #     history_data_row['event & source'] = data_cells[1].get_text()
+        #     history_data_row['price'] = data_cells[2].get_text()
+        #     history_data_row['appreciation'] = data_cells[3].get_text()
+        #     property_data['propert_history'].append(history_data_row)
+        #
+        property_data['url'] =  property_url
         self.output_data.append(property_data)
         return property_data
 
